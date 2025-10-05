@@ -12,19 +12,14 @@ app.options('*', cors());
 
 app.use(express.json());
 
-// ✅ CORREÇÃO AQUI: createTransport (sem "er")
+// ✅ CONFIGURAÇÃO MAIS SIMPLES (remove otimizações que podem atrapalhar)
 const transporter = nodemailer.createTransport({
   service: 'gmail',
   auth: {
     user: process.env.GMAIL_USER,
     pass: process.env.GMAIL_PASS
-  },
-  // ⚡ OTIMIZAÇÕES para Render
-  pool: true,
-  maxConnections: 1,
-  maxMessages: 5,
-  rateDelta: 1000,
-  rateLimit: 5
+  }
+  // ⚠️ Removidas otimizações que podem causar timeout
 });
 
 // Rota principal
@@ -35,13 +30,12 @@ app.get('/', (req, res) => {
   });
 });
 
-// ✅ Rota POST OTIMIZADA com timeout
+// ✅ Rota POST com timeout MAIOR (30 segundos)
 app.post('/send', async (req, res) => {
   console.log('📨 Recebendo email...', req.body);
   
   const { name, email, message } = req.body;
 
-  // Validação rápida
   if (!name || !email || !message) {
     return res.status(400).json({
       ok: false,
@@ -50,32 +44,27 @@ app.post('/send', async (req, res) => {
   }
 
   try {
-    // ⚡ EMAIL SIMPLES e RÁPIDO
+    // ✅ EMAIL SUPER SIMPLES (só texto)
     const mailOptions = {
       from: process.env.GMAIL_USER,
       to: process.env.GMAIL_USER,
       replyTo: email,
       subject: `🎵 Contato DJ Sampa - ${name}`,
-      text: `Nome: ${name}\nEmail: ${email}\nMensagem: ${message}`, // ⚡ TEXT instead of HTML
-      html: `
-        <h3>🎧 Novo Contato - DJ Sampa</h3>
-        <p><strong>Nome:</strong> ${name}</p>
-        <p><strong>Email:</strong> ${email}</p>
-        <p><strong>Mensagem:</strong> ${message}</p>
-      `
+      text: `Nome: ${name}\nEmail: ${email}\nMensagem: ${message}`
+      // ❌ Removido HTML para ser mais rápido
     };
 
     console.log('📤 Enviando email...');
     
-    // ⚡ TIMEOUT no envio do email (15 segundos)
+    // ✅ TIMEOUT MAIOR (30 segundos)
     const emailPromise = transporter.sendMail(mailOptions);
     const timeoutPromise = new Promise((_, reject) => 
-      setTimeout(() => reject(new Error('Timeout no envio do email')), 15000)
+      setTimeout(() => reject(new Error('Timeout: Email demorou mais de 30 segundos')), 30000)
     );
 
     await Promise.race([emailPromise, timeoutPromise]);
     
-    console.log(`✅ Email enviado: ${name}`);
+    console.log(`✅ Email enviado com sucesso: ${name}`);
     
     res.json({
       ok: true,
@@ -85,21 +74,15 @@ app.post('/send', async (req, res) => {
   } catch (error) {
     console.error('❌ Erro ao enviar email:', error.message);
     
-    // ⚡ RESPOSTAS ESPECÍFICAS
     if (error.message.includes('Timeout')) {
       res.status(408).json({
         ok: false,
-        error: 'Serviço de email demorou muito. Tente novamente.'
-      });
-    } else if (error.message.includes('Invalid login')) {
-      res.status(500).json({
-        ok: false,
-        error: 'Problema de configuração do email.'
+        error: 'Servidor ocupado. O email pode ter sido enviado mesmo assim. Tente novamente em alguns segundos.'
       });
     } else {
       res.status(500).json({
         ok: false,
-        error: 'Erro ao enviar email: ' + error.message
+        error: 'Erro interno: ' + error.message
       });
     }
   }
