@@ -12,8 +12,8 @@ app.options('*', cors());
 
 app.use(express.json());
 
-// ✅ CONFIGURAÇÃO OTIMIZADA do Nodemailer
-const transporter = nodemailer.createTransporter({
+// ✅ CORREÇÃO AQUI: createTransport (sem "er")
+const transporter = nodemailer.createTransport({
   service: 'gmail',
   auth: {
     user: process.env.GMAIL_USER,
